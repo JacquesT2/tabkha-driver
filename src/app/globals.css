@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+:root {
+  --background: #faf6f1;
+  --foreground: #292524;
+  --tabkha-cream: #faf6f1;
+  --tabkha-orange: #ea580c;
+  --tabkha-orange-dark: #c2410c;
+  --tabkha-orange-light: #fff7ed;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Tabkha styled buttons */
+button {
+  font-family: inherit;
+}
+
+/* Form inputs with Tabkha styling */
+input,
+select,
+textarea {
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  background: white;
+  color: #292524;
+  transition: border-color 0.2s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--tabkha-orange);
+  box-shadow: 0 0 0 3px var(--tabkha-orange-light);
+}
+
+/* Primary button style */
+button[type="submit"] {
+  background-color: var(--tabkha-orange);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+button[type="submit"]:hover {
+  background-color: var(--tabkha-orange-dark);
+}
+
+button[type="submit"]:disabled {
+  background-color: #d6d3d1;
+  cursor: not-allowed;
+}
+
+/* Scroll styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--tabkha-orange-light);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1ccc5;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
+}
