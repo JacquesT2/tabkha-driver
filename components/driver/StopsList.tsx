@@ -6,9 +6,11 @@ import type { OptimizedStop } from '@/lib/types';
 interface StopsListProps {
     stops: OptimizedStop[];
     onBack: () => void;
+    isTracking?: boolean;
+    trackingError?: string | null;
 }
 
-export default function StopsList({ stops, onBack }: StopsListProps) {
+export default function StopsList({ stops, onBack, isTracking, trackingError }: StopsListProps) {
     // Local state for completed stops
     const [completedStops, setCompletedStops] = useState<Set<number>>(new Set());
 
@@ -59,7 +61,22 @@ export default function StopsList({ stops, onBack }: StopsListProps) {
                     ←
                 </button>
                 <div style={{ flex: 1 }}>
-                    <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: '0 0 4px 0', color: '#1c1917' }}>Today's Route</h1>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0, color: '#1c1917' }}>Today's Route</h1>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '80px' }}>
+                            {isTracking && (
+                                <div style={{ fontSize: '0.75rem', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <span style={{ width: 6, height: 6, backgroundColor: '#16a34a', borderRadius: '50%', display: 'inline-block' }}></span>
+                                    Tracking
+                                </div>
+                            )}
+                            {trackingError && (
+                                <div style={{ fontSize: '0.65rem', color: '#ef4444', maxWidth: '120px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    ⚠️ {trackingError}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                     {/* Progress Bar */}
                     <div style={{ width: '100%', height: '6px', backgroundColor: '#e5e7eb', borderRadius: '3px', overflow: 'hidden' }}>
                         <div style={{

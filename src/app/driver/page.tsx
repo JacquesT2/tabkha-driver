@@ -30,7 +30,7 @@ export default function DriverPage() {
     // Enable tracking when we have a route (in preview or list mode)
     // We use the 'date' as the session ID
     const isTrackingEnabled = (view === 'preview' || view === 'list') && !!routeData;
-    const { isTracking } = useDriverTracking(date, isTrackingEnabled);
+    const { isTracking, error: trackingError } = useDriverTracking(date, isTrackingEnabled);
 
     const handleLoadRoute = async () => {
         setLoading(true);
@@ -78,12 +78,19 @@ export default function DriverPage() {
                         </Link>
                         <strong style={{ fontSize: '1.1rem', color: COLORS.text }}>Driver App</strong>
                     </div>
-                    {isTracking && (
-                        <div style={{ fontSize: '0.8rem', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span style={{ width: 8, height: 8, backgroundColor: '#16a34a', borderRadius: '50%', display: 'inline-block' }}></span>
-                            Tracking
-                        </div>
-                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        {isTracking && (
+                            <div style={{ fontSize: '0.8rem', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ width: 8, height: 8, backgroundColor: '#16a34a', borderRadius: '50%', display: 'inline-block' }}></span>
+                                Tracking
+                            </div>
+                        )}
+                        {trackingError && (
+                            <div style={{ fontSize: '0.7rem', color: '#ef4444', maxWidth: '150px', textAlign: 'right' }}>
+                                ⚠️ {trackingError}
+                            </div>
+                        )}
+                    </div>
                 </header>
             )}
 
@@ -162,6 +169,8 @@ export default function DriverPage() {
                     <StopsList
                         stops={routeData.route.orderedStops}
                         onBack={handleBack}
+                        isTracking={isTracking}
+                        trackingError={trackingError}
                     />
                 )}
             </div>
