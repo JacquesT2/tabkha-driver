@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { TEST_ACCOUNTS } from '@/lib/constants';
 
 type ClientData = {
     id: string;
@@ -26,6 +27,7 @@ export default function GeocodingManagerPage() {
         postalCode: ''
     });
     const [minOrderCount, setMinOrderCount] = useState(0);
+    const [excludeTestAccounts, setExcludeTestAccounts] = useState(true);
 
     const fetchClients = async () => {
         setLoading(true);
@@ -110,7 +112,8 @@ export default function GeocodingManagerPage() {
     // AND apply min order filter
     const nonGeocodedClients = clients.filter(c =>
         (c.lat === null || c.lng === null) &&
-        c.orderCount >= minOrderCount
+        c.orderCount >= minOrderCount &&
+        (!excludeTestAccounts || !TEST_ACCOUNTS.includes(c.email))
     );
 
     if (loading) return <div>Loading...</div>;
@@ -133,6 +136,17 @@ export default function GeocodingManagerPage() {
                         <option value={3}>3+</option>
                         <option value={5}>5+</option>
                     </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '1px solid #eee', paddingLeft: '15px' }}>
+                    <label style={{ fontSize: '14px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={excludeTestAccounts}
+                            onChange={(e) => setExcludeTestAccounts(e.target.checked)}
+                        />
+                        Exclude Test Accounts
+                    </label>
                 </div>
 
                 <div style={{ width: '1px', height: '30px', background: '#ddd' }}></div>

@@ -3,6 +3,7 @@ import { fetchAllDeliveryDates, fetchDeliveries, geocodeStops, optimize, saveGeo
 import type { Stop, OptimizeRequest, OptimizeResponse } from '@/lib/types';
 import HistoryMapView from '@/components/HistoryMapView';
 import StopsTable from '@/components/StopsTable';
+import { TEST_ACCOUNTS } from '@/lib/constants';
 
 const DEPOT = { lat: 48.910790500083145, lng: 2.3593634359991196 };
 
@@ -17,6 +18,7 @@ export default function History() {
   const [geocoding, setGeocoding] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [excludeTestAccounts, setExcludeTestAccounts] = useState(true);
 
   useEffect(() => {
     loadDates();
@@ -75,12 +77,13 @@ export default function History() {
   };
 
   const handleGeocode = async () => {
-    if (stops.length === 0) return;
+    const filteredStops = stops.filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email));
+    if (filteredStops.length === 0) return;
     setGeocoding(true);
     setError(null);
     setGeocodeWarnings([]);
     try {
-      const result = await geocodeStops(stops);
+      const result = await geocodeStops(filteredStops);
       setGeocodedStops(result.stops);
       setGeocodeWarnings(result.warnings || []);
 
@@ -143,7 +146,7 @@ export default function History() {
       const req: OptimizeRequest = {
         vehicleStartTimeIso: vehicleStartDate.toISOString(),
         depot: DEPOT,
-        stops: normalizedStops
+        stops: normalizedStops.filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))
       };
       const result = await optimize(req);
       setOptimizedRoute(result);
@@ -171,7 +174,17 @@ export default function History() {
       {viewMode === 'list' && (
         <>
           <div style={{ padding: 16, borderBottom: '1px solid #eee', flexShrink: 0 }}>
-            <h2 style={{ marginTop: 0 }}>Delivery History</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 0 }}>
+              <h2 style={{ margin: 0 }}>Delivery History</h2>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={excludeTestAccounts}
+                  onChange={e => setExcludeTestAccounts(e.target.checked)}
+                />
+                Exclude Test Accounts
+              </label>
+            </div>
             {dates.length === 0 ? (
               <div>No delivery dates found.</div>
             ) : (
@@ -230,7 +243,7 @@ export default function History() {
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button
                       onClick={handleGeocode}
-                      disabled={geocoding || stops.length === 0}
+                      disabled={geocoding || stops.filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email)).length === 0}
                       style={{
                         padding: '12px 24px',
                         backgroundColor: '#1a73e8',
@@ -297,7 +310,7 @@ export default function History() {
                   <div style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden', height: '300px', minHeight: '300px' }}>
                     <HistoryMapView
                       depot={DEPOT}
-                      stops={optimizedRoute ? optimizedRoute.orderedStops : geocodedStops}
+                      stops={(optimizedRoute ? optimizedRoute.orderedStops : geocodedStops).filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))}
                       polyline={optimizedRoute?.overviewPolyline}
                       routeSegments={optimizedRoute?.routeSegments}
                     />
@@ -334,16 +347,18 @@ export default function History() {
                       </tr>
                     </thead>
                     <tbody>
-                      {stops.map((s, i) => (
-                        <tr key={s.id}>
-                          <td style={{ padding: 6 }}>{i + 1}</td>
-                          <td style={{ padding: 6 }}>{s.name}</td>
-                          <td style={{ padding: 6 }}>{s.address}</td>
-                          <td style={{ padding: 6 }}>
-                            {new Date(s.timeWindowStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(s.timeWindowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                        </tr>
-                      ))}
+                      {stops
+                        .filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))
+                        .map((s, i) => (
+                          <tr key={s.id}>
+                            <td style={{ padding: 6 }}>{i + 1}</td>
+                            <td style={{ padding: 6 }}>{s.name}</td>
+                            <td style={{ padding: 6 }}>{s.address}</td>
+                            <td style={{ padding: 6 }}>
+                              {new Date(s.timeWindowStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(s.timeWindowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -359,7 +374,7 @@ export default function History() {
           <div style={{ position: 'absolute', inset: 0 }}>
             <HistoryMapView
               depot={DEPOT}
-              stops={optimizedRoute ? optimizedRoute.orderedStops : geocodedStops}
+              stops={(optimizedRoute ? optimizedRoute.orderedStops : geocodedStops).filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))}
               polyline={optimizedRoute?.overviewPolyline}
               routeSegments={optimizedRoute?.routeSegments}
             />
@@ -430,12 +445,14 @@ export default function History() {
                 <StopsTable stops={optimizedRoute.orderedStops} />
               ) : (
                 <div style={{ fontSize: '0.9em' }}>
-                  {geocodedStops.map((s, i) => (
-                    <div key={s.id} style={{ padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
-                      <strong>{i + 1}. {s.name}</strong>
-                      <div style={{ color: '#666', fontSize: '0.85em' }}>{s.address}</div>
-                    </div>
-                  ))}
+                  {geocodedStops
+                    .filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))
+                    .map((s, i) => (
+                      <div key={s.id} style={{ padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                        <strong>{i + 1}. {s.name}</strong>
+                        <div style={{ color: '#666', fontSize: '0.85em' }}>{s.address}</div>
+                      </div>
+                    ))}
                 </div>
               )}
             </div>

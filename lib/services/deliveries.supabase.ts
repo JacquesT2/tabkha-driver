@@ -118,6 +118,7 @@ export async function fetchDeliveriesForDate(deliveryDate: string): Promise<Stop
     const stop: Stop = {
       id: order.id,
       name,
+      email: profile.email,
       address,
       timeWindowStart: start.toISOString(),
       timeWindowEnd: end.toISOString(),

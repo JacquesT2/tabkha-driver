@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { TEST_ACCOUNTS } from '@/lib/constants';
 
 type ClientData = {
     id: string;
@@ -22,6 +23,7 @@ export default function ClientMapPage() {
     const [error, setError] = useState<string | null>(null);
     const [depot] = useState({ lat: 48.86, lng: 2.33 }); // Default Paris center
     const [minOrderCount, setMinOrderCount] = useState(0);
+    const [excludeTestAccounts, setExcludeTestAccounts] = useState(true);
 
     useEffect(() => {
         // Fetch client data
@@ -82,7 +84,10 @@ export default function ClientMapPage() {
         const bounds = new maplibregl.LngLatBounds();
         let hasMarkers = false;
 
-        const filteredClients = clients.filter(c => c.orderCount >= minOrderCount);
+        const filteredClients = clients.filter(c =>
+            c.orderCount >= minOrderCount &&
+            (!excludeTestAccounts || !TEST_ACCOUNTS.includes(c.email))
+        );
 
         filteredClients.forEach(client => {
             if (client.lat && client.lng) {
@@ -117,16 +122,19 @@ export default function ClientMapPage() {
             map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
         }
 
-    }, [clients, loading, depot.lat, depot.lng, minOrderCount]);
+    }, [clients, loading, depot.lat, depot.lng, minOrderCount, excludeTestAccounts]);
 
     if (loading) return <div style={{ padding: 20 }}>Loading client map...</div>;
     if (error) return <div style={{ padding: 20, color: 'red' }}>Error: {error}</div>;
 
-    const filteredClients = clients.filter(c => c.orderCount >= minOrderCount);
+    const filteredClients = clients.filter(c =>
+        c.orderCount >= minOrderCount &&
+        (!excludeTestAccounts || !TEST_ACCOUNTS.includes(c.email))
+    );
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
-            <div style={{ padding: '10px 20px', background: '#fff', borderBottom: '1px solid #ddd', display: 'flex', gap: '20px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
+            <div style={{ padding: '10px 20px', background: '#fff', borderBottom: '1px solid #ddd', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <h2 style={{ margin: 0 }}>Client Map</h2>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '1px solid #eee', paddingLeft: '15px' }}>
@@ -145,24 +153,37 @@ export default function ClientMapPage() {
                     </select>
                 </div>
 
-                <div style={{ display: 'flex', gap: '15px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '1px solid #eee', paddingLeft: '15px' }}>
+                    <label style={{ fontSize: '14px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={excludeTestAccounts}
+                            onChange={(e) => setExcludeTestAccounts(e.target.checked)}
+                        />
+                        Exclude Test Accounts
+                    </label>
+                </div>
+
+                <div style={{ display: 'flex', gap: '15px', borderLeft: '1px solid #eee', paddingLeft: '15px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#34a853' }}></div>
-                        <span>Subscriber</span>
+                        <span style={{ fontSize: '14px' }}>Subscriber</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#1a73e8' }}></div>
-                        <span>Ordered ({'>'}0)</span>
+                        <span style={{ fontSize: '14px' }}>Ordered ({'>'}0)</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#9e9e9e' }}></div>
-                        <span>Potential (0)</span>
+                        <span style={{ fontSize: '14px' }}>Potential (0)</span>
                     </div>
                 </div>
-                <div style={{ marginLeft: 'auto' }}>
+
+                <div style={{ marginLeft: 'auto', fontSize: '14px', fontWeight: 500 }}>
                     Total: {filteredClients.length} | Mapped: {filteredClients.filter(c => c.lat && c.lng).length}
                 </div>
             </div>
+
             <div style={{ flex: 1, position: 'relative' }}>
                 <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
             </div>

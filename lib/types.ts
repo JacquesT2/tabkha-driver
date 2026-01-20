@@ -6,6 +6,7 @@ export type LatLng = {
 export type Stop = {
     id: string;
     name: string;
+    email?: string;
     address?: string;
     lat?: number;
     lng?: number;

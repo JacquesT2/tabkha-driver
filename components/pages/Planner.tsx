@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { OptimizeRequest, OptimizeResponse, Stop } from '@/lib/types';
 import { optimize, fetchDeliveries } from '@/lib/api';
 import MapView from '@/components/MapView';
 import StopsTable from '@/components/StopsTable';
+import { TEST_ACCOUNTS } from '@/lib/constants';
 
 export default function Planner() {
   // Google API key no longer needed - using open-source stack
@@ -33,6 +34,7 @@ export default function Planner() {
   ]);
   const [result, setResult] = useState<OptimizeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [excludeTestAccounts, setExcludeTestAccounts] = useState(true);
   const depot = useMemo(() => ({ lat: parseFloat(depotLat), lng: parseFloat(depotLng) }), [depotLat, depotLng]);
 
   const toBaseIso = (hour: number, minute: number) => {
@@ -92,8 +94,11 @@ export default function Planner() {
     setError(null);
     setResult(null);
     try {
+      // Filter out test accounts if enabled
+      const filteredStops = stops.filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email));
+
       // Normalize all stop windows to the base (next Monday) date
-      const normalizedStops: Stop[] = stops.map(s => {
+      const normalizedStops: Stop[] = filteredStops.map(s => {
         const sh = new Date(s.timeWindowStart).getHours();
         const eh = new Date(s.timeWindowEnd).getHours();
         return { ...s, timeWindowStart: toBaseIso(sh, 0), timeWindowEnd: toBaseIso(eh, 0) };
@@ -137,34 +142,46 @@ export default function Planner() {
 
           <div style={{ marginBottom: 12 }}>
             <strong>Stops ({stops.length})</strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={excludeTestAccounts}
+                  onChange={e => setExcludeTestAccounts(e.target.checked)}
+                />
+                Exclude Test Accounts
+              </label>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-              {stops.map((s, i) => (
-                <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '1fr 240px 220px 120px 40px', gap: 6 }}>
-                  <input placeholder="Name" value={s.name} onChange={e => updateStop(i, { name: e.target.value })} />
-                  <input placeholder="Address" value={s.address || ''} onChange={e => updateStop(i, { address: e.target.value })} />
-                  <select
-                    value={`${new Date(s.timeWindowStart).getHours()}-${new Date(s.timeWindowEnd).getHours()}`}
-                    onChange={e => {
-                      const [from, to] = e.target.value.split('-').map(Number);
-                      updateStop(i, { timeWindowStart: toBaseIso(from, 0), timeWindowEnd: toBaseIso(to, 0) });
-                    }}
-                  >
-                    {[
-                      [8, 10],
-                      [10, 12],
-                      [12, 14],
-                      [14, 16],
-                      [16, 18],
-                      [18, 20],
-                      [20, 22]
-                    ].map(([a, b]) => (
-                      <option key={`${a}-${b}`} value={`${a}-${b}`}>{`${a.toString().padStart(2, '0')}:00 - ${b.toString().padStart(2, '0')}:00`}</option>
-                    ))}
-                  </select>
-                  <input placeholder="Service (min)" type="number" value={s.serviceMinutes} onChange={e => updateStop(i, { serviceMinutes: Number(e.target.value) })} />
-                  <button type="button" onClick={() => removeStop(i)}>✕</button>
-                </div>
-              ))}
+              {stops
+                .filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))
+                .map((s, i) => (
+                  <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '1fr 240px 220px 120px 40px', gap: 6 }}>
+                    <input placeholder="Name" value={s.name} onChange={e => updateStop(i, { name: e.target.value })} />
+                    <input placeholder="Address" value={s.address || ''} onChange={e => updateStop(i, { address: e.target.value })} />
+                    <select
+                      value={`${new Date(s.timeWindowStart).getHours()}-${new Date(s.timeWindowEnd).getHours()}`}
+                      onChange={e => {
+                        const [from, to] = e.target.value.split('-').map(Number);
+                        updateStop(i, { timeWindowStart: toBaseIso(from, 0), timeWindowEnd: toBaseIso(to, 0) });
+                      }}
+                    >
+                      {[
+                        [8, 10],
+                        [10, 12],
+                        [12, 14],
+                        [14, 16],
+                        [16, 18],
+                        [18, 20],
+                        [20, 22]
+                      ].map(([a, b]) => (
+                        <option key={`${a}-${b}`} value={`${a}-${b}`}>{`${a.toString().padStart(2, '0')}:00 - ${b.toString().padStart(2, '0')}:00`}</option>
+                      ))}
+                    </select>
+                    <input placeholder="Service (min)" type="number" value={s.serviceMinutes} onChange={e => updateStop(i, { serviceMinutes: Number(e.target.value) })} />
+                    <button type="button" onClick={() => removeStop(i)}>✕</button>
+                  </div>
+                ))}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button type="button" onClick={addRow}>Add Stop</button>
                 <button type="button" onClick={loadTestData}>Load Test Data</button>
@@ -174,7 +191,12 @@ export default function Planner() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button type="submit" disabled={stops.length === 0}>Optimize</button>
+            <button
+              type="submit"
+              disabled={stops.filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email)).length === 0}
+            >
+              Optimize
+            </button>
             <button type="button" onClick={() => setActiveTab('map')} disabled={!result}>Go to Map</button>
           </div>
           {error && <div style={{ color: '#d93025', marginTop: 12 }}>{error}</div>}
