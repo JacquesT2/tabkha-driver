@@ -10,6 +10,7 @@ const History = dynamic(() => import('@/components/pages/History'), { ssr: false
 const ClientMapPage = dynamic(() => import('@/components/pages/ClientMapPage'), { ssr: false });
 const GeocodingManagerPage = dynamic(() => import('@/components/pages/GeocodingManagerPage'), { ssr: false });
 const DeliveryZonesMapPage = dynamic(() => import('@/components/pages/DeliveryZonesMapPage'), { ssr: false });
+const DeliverySimulationPage = dynamic(() => import('@/components/pages/DeliverySimulationPage'), { ssr: false });
 
 // Tabkha brand colors - designed for good contrast
 const COLORS = {
@@ -24,7 +25,7 @@ const COLORS = {
 };
 
 export default function ManagementPage() {
-    const [activeView, setActiveView] = useState<'planner' | 'history' | 'clients' | 'geocoding' | 'zones'>('planner');
+    const [activeView, setActiveView] = useState<'planner' | 'history' | 'clients' | 'geocoding' | 'zones' | 'simulation'>('planner');
 
     const buttonStyle = (view: string) => ({
         padding: '8px 16px',
@@ -87,14 +88,18 @@ export default function ManagementPage() {
                     <button onClick={() => setActiveView('zones')} style={buttonStyle('zones')}>
                         🗺️ Zones
                     </button>
+                    <button onClick={() => setActiveView('simulation')} style={buttonStyle('simulation')}>
+                        🧪 Simulation
+                    </button>
                 </nav>
             </header>
             <div style={{ flex: 1, minHeight: 0, backgroundColor: COLORS.background }}>
-                {activeView === 'planner' ? <Planner /> :
-                    activeView === 'history' ? <History /> :
-                        activeView === 'clients' ? <ClientMapPage /> :
-                            activeView === 'geocoding' ? <GeocodingManagerPage /> :
-                                <DeliveryZonesMapPage />}
+                {activeView === 'planner' && <Planner />}
+                {activeView === 'history' && <History />}
+                {activeView === 'clients' && <ClientMapPage />}
+                {activeView === 'geocoding' && <GeocodingManagerPage />}
+                {activeView === 'zones' && <DeliveryZonesMapPage />}
+                {activeView === 'simulation' && <DeliverySimulationPage />}
             </div>
         </div>
     );
