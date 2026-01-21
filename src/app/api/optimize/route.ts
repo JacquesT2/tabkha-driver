@@ -84,6 +84,8 @@ export async function POST(request: NextRequest) {
         const routeSegments = await getSegmentPolylines({ depot, orderedStops: etaResult.orderedStops });
         const polyline = await getDirectionsPolyline({ depot, stops: orderedStops });
 
+        const routes = splitRoutes(etaResult.orderedStops);
+
         return NextResponse.json({
             orderedStops: etaResult.orderedStops,
             totalDistanceMeters: etaResult.totalDistanceMeters,
@@ -92,6 +94,7 @@ export async function POST(request: NextRequest) {
             routeSegments,
             driverStartTimeIso,
             geocodeWarnings: geocodeResult.warnings,
+            routes,
         });
     } catch (err: unknown) {
         console.error('[OPTIMIZE_ERROR]', err);
@@ -101,4 +104,72 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
+}
+
+function splitRoutes(stops: import('@/lib/types').OptimizedStop[]): import('@/lib/types').RouteResult[] {
+    const routes: import('@/lib/types').RouteResult[] = [];
+    let currentStops: import('@/lib/types').OptimizedStop[] = [];
+
+    // Start with the first route
+    let routeIndex = 1;
+
+    for (const stop of stops) {
+        currentStops.push(stop);
+
+        // If this stop is a return to depot (but not just the very first start, though usually that's hidden)
+        // logic: if isDepotReturn is true, it marks the END of a route leg.
+        if (stop.isDepotReturn) {
+            // finalize this route
+            routes.push(createRouteResult(routeIndex++, currentStops));
+            currentStops = [];
+        }
+    }
+
+    // If there are remaining stops that didn't end with a depot return (shouldn't happen if logic is correct, but safe fallback)
+    if (currentStops.length > 0) {
+        routes.push(createRouteResult(routeIndex++, currentStops));
+    }
+
+    return routes;
+}
+
+function createRouteResult(index: number, stops: import('@/lib/types').OptimizedStop[]): import('@/lib/types').RouteResult {
+    let totalDuration = 0;
+    let totalDistance = 0;
+
+    // Simple summation for this leg
+    for (const s of stops) {
+        totalDuration += (s.travelSecondsFromPrev || 0) + (s.waitSecondsBeforeWindow || 0) + (s.serviceMinutes * 60);
+        // Note: Distance is not strictly tracked per stop in OptimizedStop unfortunately, 
+        // but let's see if we can infer or if we need to change upstream.
+        // Actually ComputeEtas just returns total. 
+        // We'll approximate or need to update OptimizedStop to include distance from prev if we want accurate per-route distance.
+        // For now, let's assume we can't easily get distance without schema change, 
+        // BUT `computeEtas` returns totals. 
+        // Let's modify OptimizedStop in types.ts? No, let's check eta.ts.
+        // eta.ts has `travelMeters` but doesn't put it in OptimizedStop.
+        // For now, let's leave distance as 0 or estimated, or we update eta.ts.
+        // Let's stick to Duration for Cost.
+    }
+
+    // Cost: 30 EUR / hr
+    // Duration in seconds / 3600 * 30
+    const hours = totalDuration / 3600;
+    const cost = Math.ceil(hours * 30 * 100) / 100; // Round to 2 decimals
+
+    // Average cost per drop
+    const dropCount = stops.filter(s => !s.isDepotReturn).length;
+    let avgCost = 0;
+    if (dropCount > 0) {
+        avgCost = Math.ceil((cost / dropCount) * 100) / 100;
+    }
+
+    return {
+        id: `route-${index}`,
+        stops,
+        totalDurationSeconds: totalDuration,
+        totalDistanceMeters: 0, // Placeholder as we miss per-stop distance in current type
+        estimatedCost: cost,
+        averageCostPerDrop: avgCost
+    };
 }

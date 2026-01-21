@@ -42,7 +42,17 @@ export type OptimizeResponse = {
     overviewPolyline: string;
     routeSegments?: RouteSegment[];
     driverStartTimeIso?: string;
+    routes?: RouteResult[];
     geocodeWarnings?: Array<{ stopId: string; address: string; fallbackQuery: string }>;
+};
+
+export type RouteResult = {
+    id: string;
+    stops: OptimizedStop[];
+    totalDurationSeconds: number;
+    totalDistanceMeters: number;
+    estimatedCost: number;
+    averageCostPerDrop: number;
 };
 
 export type ErrorResponse = {

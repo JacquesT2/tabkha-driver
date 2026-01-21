@@ -268,7 +268,7 @@ export default function Planner() {
             top: 10,
             right: 10,
             bottom: 10,
-            width: 300,
+            width: 450,
             zIndex: 10,
             background: 'rgba(255,255,255,0.95)',
             borderRadius: 8,
@@ -279,10 +279,35 @@ export default function Planner() {
           }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid #eee' }}>
               <h3 style={{ margin: 0, fontSize: '1em' }}>Itinerary</h3>
+              {result && (
+                <div style={{ fontSize: '0.85em', color: '#666', marginTop: 4 }}>
+                  Total Cost: €{(result.routes || []).reduce((sum, r) => sum + r.estimatedCost, 0).toFixed(2)}
+                </div>
+              )}
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
               {result ? (
-                <StopsTable stops={result.orderedStops} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {result.routes?.map((route, idx) => (
+                    <div key={route.id} style={{ border: '1px solid #ddd', borderRadius: 6, padding: 8, backgroundColor: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, borderBottom: '1px solid #eee', paddingBottom: 4 }}>
+                        <h4 style={{ margin: 0, fontSize: '0.95em' }}>Route {idx + 1}</h4>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '0.9em', fontWeight: 'bold', color: '#188038', display: 'block' }}>€{route.estimatedCost.toFixed(2)}</span>
+                          <span style={{ fontSize: '0.75em', color: '#666' }}>€{route.averageCostPerDrop.toFixed(2)}/drop</span>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '0.8em', color: '#555', marginBottom: 8 }}>
+                        Est. Duration: {Math.round(route.totalDurationSeconds / 60)} min
+                      </div>
+                      <StopsTable stops={route.stops} />
+                    </div>
+                  ))}
+                  {/* Fallback for old response or empty routes */}
+                  {(!result.routes || result.routes.length === 0) && (
+                    <StopsTable stops={result.orderedStops} />
+                  )}
+                </div>
               ) : (
                 <div style={{ color: '#666', padding: 8 }}>No results yet.</div>
               )}
