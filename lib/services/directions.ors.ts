@@ -3,6 +3,57 @@ import type { Stop, OptimizedStop, RouteSegment } from '@/lib/types';
 const ORS_API_KEY = process.env.ORS_API_KEY || '';
 const ORS_BASE_URL = 'https://api.openrouteservice.org';
 
+export interface RouteStats {
+    distanceMeters: number;
+    durationSeconds: number;
+}
+
+export async function getRouteStats(coords: [number, number][]): Promise<RouteStats | null> {
+    try {
+        if (coords.length < 2) return null;
+        if (!ORS_API_KEY) {
+            console.warn('[DIRECTIONS] ORS_API_KEY not set');
+            return null;
+        }
+
+        const res = await fetch(`${ORS_BASE_URL}/v2/directions/driving-car`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': ORS_API_KEY,
+            },
+            body: JSON.stringify({
+                coordinates: coords,
+                instructions: false,
+                maneuvers: false,
+                preference: 'recommended'
+            }),
+        });
+
+        if (!res.ok) {
+            console.warn('[DIRECTIONS] ORS stats request failed:', res.status, res.statusText);
+            return null;
+        }
+
+        const data = await res.json();
+
+        if (!data.routes?.[0]?.summary) {
+            console.warn('[DIRECTIONS] ORS stats response missing summary');
+            return null;
+        }
+
+        const { distance, duration } = data.routes[0].summary;
+        return {
+            distanceMeters: distance,
+            durationSeconds: duration
+        };
+
+    } catch (err: any) {
+        console.warn('[DIRECTIONS] Failed to fetch stats from ORS:', err?.message || String(err));
+        return null;
+    }
+}
+
 export async function getDirectionsPolyline(params: { depot: { lat: number; lng: number }; stops: Stop[] }): Promise<string | null> {
     try {
         if (params.stops.length === 0) {
