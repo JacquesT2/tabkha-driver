@@ -4,6 +4,11 @@ import type { Stop, OptimizeRequest, OptimizeResponse } from '@/lib/types';
 import HistoryMapView from '@/components/HistoryMapView';
 import StopsTable from '@/components/StopsTable';
 import { TEST_ACCOUNTS } from '@/lib/constants';
+import { ParkingSpot } from '@/lib/services/parking-spots.supabase'; // Or define locally if import fails but it should be fine.
+// Actually let's just use the type from the file since I'm not sure if I exported it from index (I didn't). 
+// I'll define it locally to be safe or update the import.
+// Let's try to import it. If it fails, I'll fix it. I wrote `export type ParkingSpot` in `lib/services/parking-spots.supabase.ts`
+import { fetchAllParkingSpots } from '@/lib/services/parking-spots.supabase';
 
 const DEPOT = { lat: 48.910790500083145, lng: 2.3593634359991196 };
 
@@ -19,6 +24,21 @@ export default function History() {
   const [optimizing, setOptimizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [excludeTestAccounts, setExcludeTestAccounts] = useState(true);
+
+  // Parking State
+  const [showParking, setShowParking] = useState(false);
+  const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>([]);
+  const [parkingLoading, setParkingLoading] = useState(false);
+
+  useEffect(() => {
+    if (showParking && parkingSpots.length === 0) {
+      setParkingLoading(true);
+      fetchAllParkingSpots()
+        .then(spots => setParkingSpots(spots))
+        .catch(err => console.error("Failed to fetch parking spots:", err))
+        .finally(() => setParkingLoading(false));
+    }
+  }, [showParking, parkingSpots.length]);
 
   useEffect(() => {
     loadDates();
@@ -184,6 +204,14 @@ export default function History() {
                 />
                 Exclude Test Accounts
               </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', cursor: 'pointer', marginLeft: 16 }}>
+                <input
+                  type="checkbox"
+                  checked={showParking}
+                  onChange={e => setShowParking(e.target.checked)}
+                />
+                {parkingLoading ? 'Loading...' : 'Show Parking'}
+              </label>
             </div>
             {dates.length === 0 ? (
               <div>No delivery dates found.</div>
@@ -313,6 +341,8 @@ export default function History() {
                       stops={(optimizedRoute ? optimizedRoute.orderedStops : geocodedStops).filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))}
                       polyline={optimizedRoute?.overviewPolyline}
                       routeSegments={optimizedRoute?.routeSegments}
+                      showParking={showParking}
+                      parkingSpots={parkingSpots}
                     />
                   </div>
                 )}
@@ -407,6 +437,8 @@ export default function History() {
               stops={(optimizedRoute ? optimizedRoute.orderedStops : geocodedStops).filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))}
               polyline={optimizedRoute?.overviewPolyline}
               routeSegments={optimizedRoute?.routeSegments}
+              showParking={showParking}
+              parkingSpots={parkingSpots}
             />
           </div>
 
