@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import type { Stop } from '@/lib/types';
+import type { Stop, ManualOrder } from '@/lib/types';
+import { loadModifiedDropsForDate, loadDropsMovedToDate } from './persistence.supabase';
 
 /**
  * Maps delivery_time text to time window hours
@@ -49,10 +50,10 @@ function parseTimeWindow(deliveryTime: string | null, baseDate: Date): { start: 
  * Fetches orders for a delivery date and converts them to Stop format.
  */
 export async function fetchDeliveriesForDate(deliveryDate: string): Promise<Stop[]> {
-  // Fetch orders for the given delivery date
-  const { data: orders, error: ordersError } = await supabase
+  // 1. Fetch originally scheduled orders for the given date
+  const { data: originalOrders, error: ordersError } = await supabase
     .from('orders')
-    .select('id, user_id, delivery_window, status')
+    .select('id, user_id, delivery_window, status, delivery_date')
     .eq('delivery_date', deliveryDate)
     .neq('status', 'cancelled');
 
@@ -60,12 +61,60 @@ export async function fetchDeliveriesForDate(deliveryDate: string): Promise<Stop
     throw new Error(`Supabase error: ${ordersError.message}`);
   }
 
-  if (!orders || orders.length === 0) {
+  // 2. Fetch modified drops rules for this date (moved away, time changed, or moved TO this date)
+  const modifiedDropsAwayOrChanged = await loadModifiedDropsForDate(deliveryDate);
+  const modifiedDropsToHere = await loadDropsMovedToDate(deliveryDate);
+
+  // Create a fast lookup for modifications
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const modsByOrderId = new Map<string, any>();
+  for (const mod of [...modifiedDropsAwayOrChanged, ...modifiedDropsToHere]) {
+    // Keep the most recent modification if there are multiple (shouldn't happen with proper upsert)
+    modsByOrderId.set(mod.order_id, mod);
+  }
+
+  // 3. Filter and adjust the current day's drops
+  let ordersList = originalOrders || [];
+
+  // - Filter out drops moved away
+  ordersList = ordersList.filter(o => {
+    const mod = modsByOrderId.get(o.id);
+    if (!mod) return true; // No modification = keep
+
+    // If it has a new date and it's NOT today, exclude it
+    if (mod.new_delivery_date && mod.new_delivery_date !== deliveryDate) {
+      return false;
+    }
+    return true; // Keep if date is same or new_date is null (e.g. just a time change)
+  });
+
+  // - Add drops moved TO this date from other dates
+  if (modifiedDropsToHere.length > 0) {
+    const toHereIds = modifiedDropsToHere.map(m => m.order_id);
+    const { data: movedOrders } = await supabase
+      .from('orders')
+      .select('id, user_id, delivery_window, status, delivery_date')
+      .in('id', toHereIds)
+      .neq('status', 'cancelled');
+
+    if (movedOrders) {
+      for (const movedOrder of movedOrders) {
+        // Prevent duplicates
+        if (!ordersList.some(o => o.id === movedOrder.id)) {
+          ordersList.push(movedOrder);
+        }
+      }
+    }
+  }
+
+  // Redundant check removed to fix TS error
+  if (!ordersList || ordersList.length === 0) {
     return [];
   }
 
   // Fetch profiles for all user_ids
-  const userIds = orders.filter(o => o.user_id).map(o => o.user_id) as string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const userIds = ordersList.filter((o: any) => o.user_id).map((o: any) => o.user_id) as string[];
   if (userIds.length === 0) {
     return [];
   }
@@ -85,11 +134,11 @@ export async function fetchDeliveriesForDate(deliveryDate: string): Promise<Stop
   const baseDate = new Date(deliveryDate);
   const stops: Stop[] = [];
 
-  for (const order of orders as any[]) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const order of ordersList as any[]) {
     const profile = profileMap.get(order.user_id);
 
     if (!profile) {
-      // eslint-disable-next-line no-console
       console.warn(`No profile found for order ${order.id} (user_id: ${order.user_id}), skipping`);
       continue;
     }
@@ -104,12 +153,19 @@ export async function fetchDeliveriesForDate(deliveryDate: string): Promise<Stop
     const address = addressParts.length > 0 ? addressParts.join(', ') : null;
 
     if (!address) {
-      // eslint-disable-next-line no-console
       console.warn(`No address found for order ${order.id} (user_id: ${order.user_id}), skipping`);
       continue;
     }
 
-    const { start, end } = parseTimeWindow(order.delivery_window, baseDate);
+    // Apply time window overrides if a modification exists
+    const mod = modsByOrderId.get(order.id);
+    let timeWindowStr = order.delivery_window;
+
+    if (mod && mod.new_delivery_window_start && mod.new_delivery_window_end) {
+      timeWindowStr = `${mod.new_delivery_window_start}-${mod.new_delivery_window_end}`;
+    }
+
+    const { start, end } = parseTimeWindow(timeWindowStr, baseDate);
     const name = profile.first_name && profile.last_name
       ? `${profile.first_name} ${profile.last_name}`
       : profile.first_name || profile.last_name || profile.email?.split('@')[0] || `Delivery ${order.id.slice(0, 8)}`;
@@ -154,9 +210,89 @@ export async function getAllDeliveryDates(): Promise<string[]> {
 
   // Get unique dates and sort (newest first)
   const uniqueDates = Array.from(new Set(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data.map((row: any) => row.delivery_date).filter(Boolean)
   )).sort((a, b) => b.localeCompare(a)); // Sort descending (newest first)
 
   return uniqueDates as string[];
 }
+
+/**
+ * Fetches orders for manual tracking/accounting on a specific date.
+ */
+export async function fetchOrdersForManualTracking(deliveryDate: string): Promise<ManualOrder[]> {
+  const { data: orders, error: ordersError } = await supabase
+    .from('orders')
+    .select('id, user_id, delivery_window, status, delivery_date')
+    .eq('delivery_date', deliveryDate)
+    .neq('status', 'cancelled');
+
+  if (ordersError) {
+    throw new Error(`Supabase error: ${ordersError.message}`);
+  }
+
+  if (!orders || orders.length === 0) {
+    return [];
+  }
+
+  const userIds = orders.filter(o => o.user_id).map(o => o.user_id) as string[];
+  let profileMap = new Map();
+
+  if (userIds.length > 0) {
+    const { data: profiles, error: profError } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, email, adresse, city, postal_code')
+      .in('id', userIds);
+
+    if (profError) {
+      throw new Error(`Supabase profiles error: ${profError.message}`);
+    }
+    profileMap = new Map((profiles || []).map(p => [p.id, p]));
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return orders.map((order: any) => {
+    const profile = profileMap.get(order.user_id);
+
+    let address = 'No address found';
+    let customerName = 'Unknown Customer';
+
+    if (profile) {
+      const addressParts = [
+        profile.adresse,
+        profile.postal_code,
+        profile.city
+      ].filter(Boolean);
+      if (addressParts.length > 0) address = addressParts.join(', ');
+
+      customerName = profile.first_name && profile.last_name
+        ? `${profile.first_name} ${profile.last_name}`
+        : profile.first_name || profile.last_name || profile.email?.split('@')[0] || `Delivery ${order.id.slice(0, 8)}`;
+    }
+
+    return {
+      id: order.id,
+      customerName,
+      address,
+      deliveryWindow: order.delivery_window || 'Unspecified',
+      status: order.status,
+      deliveryDate: order.delivery_date
+    };
+  });
+}
+
+/**
+ * Updates the status of an order.
+ */
+export async function updateOrderStatus(orderId: string, status: string): Promise<void> {
+  const { error } = await supabase
+    .from('orders')
+    .update({ status })
+    .eq('id', orderId);
+
+  if (error) {
+    throw new Error(`Supabase update error: ${error.message}`);
+  }
+}
+
 

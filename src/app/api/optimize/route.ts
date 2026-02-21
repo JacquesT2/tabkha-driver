@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { OptimizeRequest, ErrorResponse } from '@/lib/types';
 import { buildMatrix } from '@/lib/services/matrix.ors';
-import { solveVRPTW } from '@/lib/optimizer/vrptw';
+import { solveVRPTWTrafficAware } from '@/lib/optimizer/vrptw-traffic-aware';
 import { computeEtas } from '@/lib/utils/eta';
 import { getDirectionsPolyline, getSegmentPolylines } from '@/lib/services/directions.ors';
 import { geocodeStopsIfNeeded } from '@/lib/services/geocode.nominatim';
@@ -19,14 +19,27 @@ export async function POST(request: NextRequest) {
 
         // Geocode any address-only stops
         const geocodeResult = await geocodeStopsIfNeeded(body.stops);
-        const gcStops = geocodeResult.stops;
+
+        // Filter out stops without coordinates
+        const gcStops = geocodeResult.stops.filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
+        const skippedStops = geocodeResult.stops.filter(s => typeof s.lat !== 'number' || typeof s.lng !== 'number');
 
         if (gcStops.length === 0) {
             return NextResponse.json(
-                { code: 'INPUT_INVALID', message: 'No valid stops after geocoding' } as ErrorResponse,
+                { code: 'INPUT_INVALID', message: 'No valid stops after geocoding. All addresses failed to geocode.' } as ErrorResponse,
                 { status: 400 }
             );
         }
+
+        // Add warnings for skipped stops
+        const allWarnings = [
+            ...geocodeResult.warnings,
+            ...skippedStops.map(s => ({
+                stopId: s.id,
+                address: s.address || 'No address',
+                fallbackQuery: 'Geocoding failed - stop excluded from route'
+            }))
+        ];
 
         const first = gcStops[0];
         const depot = body.depot ?? { lat: first.lat!, lng: first.lng! };
@@ -41,13 +54,15 @@ export async function POST(request: NextRequest) {
 
         const matrix = await buildMatrix(waypoints, approxDeparture);
 
-        const solveResult = solveVRPTW({
+        const solveResult = solveVRPTWTrafficAware({
             matrixSeconds: matrix.durationsSeconds,
             serviceMinutes: body.stops.map(s => s.serviceMinutes),
             timeWindows: body.stops.map(s => ({ startIso: s.timeWindowStart, endIso: s.timeWindowEnd })),
+            startTimeIso: body.vehicleStartTimeIso,
+            avoidRushHour: true,
         });
 
-        const orderedStops = solveResult.order.map(index => gcStops[index]);
+        const orderedStops = solveResult.order.map((index: number) => gcStops[index]);
 
         // Compute driver start time
         let driverStartTimeIso: string | undefined;
@@ -93,7 +108,7 @@ export async function POST(request: NextRequest) {
             overviewPolyline: polyline || '',
             routeSegments,
             driverStartTimeIso,
-            geocodeWarnings: geocodeResult.warnings,
+            geocodeWarnings: allWarnings,
             routes,
         });
     } catch (err: unknown) {
@@ -165,7 +180,7 @@ function createRouteResult(index: number, stops: import('@/lib/types').Optimized
     }
 
     return {
-        id: `route-${index}`,
+        id: `route - ${index} `,
         stops,
         totalDurationSeconds: totalDuration,
         totalDistanceMeters: 0, // Placeholder as we miss per-stop distance in current type

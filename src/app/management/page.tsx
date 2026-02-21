@@ -11,6 +11,7 @@ const ClientMapPage = dynamic(() => import('@/components/pages/ClientMapPage'), 
 const GeocodingManagerPage = dynamic(() => import('@/components/pages/GeocodingManagerPage'), { ssr: false });
 const DeliveryZonesMapPage = dynamic(() => import('@/components/pages/DeliveryZonesMapPage'), { ssr: false });
 const DeliverySimulationPage = dynamic(() => import('@/components/pages/DeliverySimulationPage'), { ssr: false });
+const ManualDeliveryPage = dynamic(() => import('@/components/pages/ManualDeliveryPage'), { ssr: false });
 
 // Tabkha brand colors - designed for good contrast
 const COLORS = {
@@ -25,7 +26,7 @@ const COLORS = {
 };
 
 export default function ManagementPage() {
-    const [activeView, setActiveView] = useState<'planner' | 'history' | 'clients' | 'geocoding' | 'zones' | 'simulation'>('planner');
+    const [activeView, setActiveView] = useState<'planner' | 'routes' | 'clients' | 'geocoding' | 'zones' | 'simulation' | 'manual-tracking'>('routes');
 
     const buttonStyle = (view: string) => ({
         padding: '8px 16px',
@@ -73,11 +74,11 @@ export default function ManagementPage() {
                             🏠 Home
                         </button>
                     </Link>
+                    <button onClick={() => setActiveView('routes')} style={buttonStyle('routes')}>
+                        🗺️ Routes
+                    </button>
                     <button onClick={() => setActiveView('planner')} style={buttonStyle('planner')}>
                         📋 Planner
-                    </button>
-                    <button onClick={() => setActiveView('history')} style={buttonStyle('history')}>
-                        📜 History
                     </button>
                     <button onClick={() => setActiveView('clients')} style={buttonStyle('clients')}>
                         👥 Clients
@@ -86,20 +87,24 @@ export default function ManagementPage() {
                         📍 Geocoding
                     </button>
                     <button onClick={() => setActiveView('zones')} style={buttonStyle('zones')}>
-                        🗺️ Zones
+                        🔲 Zones
                     </button>
                     <button onClick={() => setActiveView('simulation')} style={buttonStyle('simulation')}>
                         🧪 Simulation
+                    </button>
+                    <button onClick={() => setActiveView('manual-tracking')} style={buttonStyle('manual-tracking')}>
+                        📝 Accounting
                     </button>
                 </nav>
             </header>
             <div style={{ flex: 1, minHeight: 0, backgroundColor: COLORS.background }}>
                 {activeView === 'planner' && <Planner />}
-                {activeView === 'history' && <History />}
+                {activeView === 'routes' && <History />}
                 {activeView === 'clients' && <ClientMapPage />}
                 {activeView === 'geocoding' && <GeocodingManagerPage />}
                 {activeView === 'zones' && <DeliveryZonesMapPage />}
                 {activeView === 'simulation' && <DeliverySimulationPage />}
+                {activeView === 'manual-tracking' && <ManualDeliveryPage />}
             </div>
         </div>
     );

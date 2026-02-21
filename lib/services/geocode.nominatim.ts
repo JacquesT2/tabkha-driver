@@ -110,8 +110,9 @@ export async function geocodeStopsIfNeeded(stops: Stop[]): Promise<GeocodeResult
         out.push({ ...s, lat: result.lat, lng: result.lng });
       } else {
         // eslint-disable-next-line no-console
-        console.warn(`[GEOCODE_FAILED] Could not geocode address "${s.address}" for stop ${s.id}, skipping`);
-        // Skip this stop instead of failing the entire operation
+        console.warn(`[GEOCODE_FAILED] Could not geocode address "${s.address}" for stop ${s.id}`);
+        // Keep the stop but without coordinates
+        out.push(s);
       }
     } catch (err: any) {
       // Handle network errors and connection issues
@@ -120,9 +121,10 @@ export async function geocodeStopsIfNeeded(stops: Stop[]): Promise<GeocodeResult
         console.error(`[GEOCODE_ERROR] Cannot connect to Nominatim at ${NOMINATIM_URL}. Is the service running? Error: ${err.message || err.code || 'Connection refused'}`);
         throw new Error(`Cannot connect to Nominatim at ${NOMINATIM_URL}. Is the service running?`);
       }
-      // For other errors, log and skip this stop
+      // For other errors, log and keep the stop without coordinates
       // eslint-disable-next-line no-console
-      console.warn(`[GEOCODE_ERROR] Geocoding error for "${s.address}": ${err?.message || String(err)}, skipping stop ${s.id}`);
+      console.warn(`[GEOCODE_ERROR] Geocoding error for "${s.address}": ${err?.message || String(err)}`);
+      out.push(s);
     }
   }
   return { stops: out, warnings };

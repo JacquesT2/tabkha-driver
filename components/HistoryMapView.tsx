@@ -8,9 +8,17 @@ type Props = {
   stops: Stop[];
   polyline?: string;
   routeSegments?: RouteSegment[];
+  showParking?: boolean;
+  parkingSpots?: Array<{
+    id: string;
+    lat: number;
+    lng: number;
+    address: string | null;
+    parking_type: string | null;
+  }>;
 };
 
-export default function HistoryMapView({ depot, stops, polyline, routeSegments }: Props) {
+export default function HistoryMapView({ depot, stops, polyline, routeSegments, showParking, parkingSpots = [] }: Props) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -265,6 +273,100 @@ export default function HistoryMapView({ depot, stops, polyline, routeSegments }
       map.once('load', updateMap);
     }
   }, [depot.lat, depot.lng, polyline, routeSegments, stops]);
+
+  // Parking Visualization (Separate Effect)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    // Clean up previous layers/sources/markers
+    if (map.getLayer('parking-lines')) map.removeLayer('parking-lines');
+    if (map.getSource('parking-lines-source')) map.removeSource('parking-lines-source');
+
+    // Remove parking markers
+    const parkingMarkers = document.getElementsByClassName('marker-parking');
+    while (parkingMarkers.length > 0) {
+      parkingMarkers[0].parentNode?.removeChild(parkingMarkers[0]);
+    }
+
+    if (showParking && parkingSpots && parkingSpots.length > 0) {
+      const lines: any[] = [];
+      const addedMarkers = new Set<string>();
+
+      stops.forEach(stop => {
+        if (!stop.lat || !stop.lng) return;
+
+        // Simple Euclidean distance sort (fast enough for <10k spots * <1k stops)
+        // Optimization: Filter roughly by bounding box first if needed, but JS is fast.
+        const sorted = parkingSpots
+          .map(p => ({
+            spot: p,
+            dist: Math.pow(p.lat - stop.lat!, 2) + Math.pow(p.lng - stop.lng!, 2)
+          }))
+          .sort((a, b) => a.dist - b.dist)
+          .slice(0, 2); // Top 2
+
+        sorted.forEach(({ spot }) => {
+          // Add Line
+          lines.push({
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: [[stop.lng, stop.lat], [spot.lng, spot.lat]]
+            }
+          });
+
+          // Add Marker if not already added
+          if (!addedMarkers.has(spot.id)) {
+            addedMarkers.add(spot.id);
+            const el = document.createElement('div');
+            el.className = 'marker-parking';
+            el.style.backgroundColor = '#f59e0b'; // Amber
+            el.style.width = '14px';
+            el.style.height = '14px';
+            el.style.borderRadius = '50%';
+            el.style.border = '2px solid white';
+            el.style.color = 'white';
+            el.style.fontSize = '9px';
+            el.style.fontWeight = 'bold';
+            el.style.display = 'flex';
+            el.style.alignItems = 'center';
+            el.style.justifyContent = 'center';
+            el.innerText = 'P';
+            el.title = `${spot.parking_type || 'Livraison'}\n${spot.address || ''}`;
+
+            new maplibregl.Marker({ element: el })
+              .setLngLat([spot.lng, spot.lat])
+              .addTo(map);
+          }
+        });
+      });
+
+      // Add Lines Source & Layer
+      map.addSource('parking-lines-source', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: lines
+        }
+      });
+
+      map.addLayer({
+        id: 'parking-lines',
+        type: 'line',
+        source: 'parking-lines-source',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': '#f59e0b',
+          'line-width': 2,
+          'line-dasharray': [2, 2]
+        }
+      });
+    }
+  }, [showParking, parkingSpots, stops]);
 
   return <div style={{ width: '100%', height: '100%' }} ref={mapRef} />;
 }
