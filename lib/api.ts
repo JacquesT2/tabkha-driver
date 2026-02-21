@@ -1,7 +1,34 @@
 import type { OptimizeRequest, OptimizeResponse, ErrorResponse, Stop } from '@/lib/types';
+import type { CustomRouteSummary } from '@/lib/services/persistence.supabase';
 
 export async function optimize(req: OptimizeRequest): Promise<OptimizeResponse> {
     const res = await fetch('/api/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+    });
+    if (!res.ok) {
+        const err: ErrorResponse = await res.json().catch(() => ({ code: 'INTERNAL', message: 'Unknown error' }));
+        throw new Error(`${err.code}: ${err.message}`);
+    }
+    return res.json();
+}
+
+export async function refineWithTraffic(req: OptimizeRequest): Promise<OptimizeResponse> {
+    const res = await fetch('/api/refine-traffic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+    });
+    if (!res.ok) {
+        const err: ErrorResponse = await res.json().catch(() => ({ code: 'INTERNAL', message: 'Unknown error' }));
+        throw new Error(`${err.code}: ${err.message}`);
+    }
+    return res.json();
+}
+
+export async function optimizeByTimeSlots(req: OptimizeRequest): Promise<OptimizeResponse> {
+    const res = await fetch('/api/optimize-batches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(req),
@@ -57,11 +84,16 @@ export async function fetchClients(): Promise<any[]> {
 // These will need proper backend routes to be fully functional
 
 export async function geocodeStops(stops: Stop[]): Promise<{ stops: Stop[]; warnings?: Array<{ stopId: string; address: string; fallbackQuery: string }> }> {
-    // Note: The /optimize endpoint already handles geocoding, so this function might be redundant 
-    // depending on how it's used in the frontend.
-    // However, if we need explicit geocoding without optimization, we should create a dedicated endpoint.
-    // For now, we'll keep the pass-through behavior as the main optimization flow handles it.
-    return { stops, warnings: [] };
+    const res = await fetch('/api/geocode-stops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stops }),
+    });
+    if (!res.ok) {
+        const err: ErrorResponse = await res.json().catch(() => ({ code: 'INTERNAL', message: 'Unknown error' }));
+        throw new Error(`${err.code}: ${err.message}`);
+    }
+    return res.json();
 }
 
 export async function saveGeocoding(
@@ -104,5 +136,48 @@ export async function loadRoute(date: string): Promise<{ route: OptimizeResponse
         throw new Error(`${err.code}: ${err.message}`);
     }
 
+    return res.json();
+}
+
+export async function listCustomRoutes(date: string): Promise<CustomRouteSummary[]> {
+    const res = await fetch(`/api/deliveries/custom-routes/${date}`);
+    if (!res.ok) {
+        const err: ErrorResponse = await res.json().catch(() => ({ code: 'INTERNAL', message: 'Unknown error' }));
+        throw new Error(`${err.code}: ${err.message}`);
+    }
+    const data = await res.json();
+    return data.routes;
+}
+
+export async function saveCustomRouteApi(
+    date: string,
+    name: string,
+    description: string | undefined,
+    route: OptimizeResponse,
+    depot: { lat: number; lng: number }
+): Promise<string> {
+    const res = await fetch(`/api/deliveries/custom-routes/${date}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description, route, depot }),
+    });
+    if (!res.ok) {
+        const err: ErrorResponse = await res.json().catch(() => ({ code: 'INTERNAL', message: 'Unknown error' }));
+        throw new Error(`${err.code}: ${err.message}`);
+    }
+    const data = await res.json();
+    return data.id;
+}
+
+export async function loadCustomRouteApi(
+    date: string,
+    id: string
+): Promise<{ route: OptimizeResponse; depot: { lat: number; lng: number }; name: string } | null> {
+    const res = await fetch(`/api/deliveries/custom-routes/${date}/${id}`);
+    if (res.status === 404) return null;
+    if (!res.ok) {
+        const err: ErrorResponse = await res.json().catch(() => ({ code: 'INTERNAL', message: 'Unknown error' }));
+        throw new Error(`${err.code}: ${err.message}`);
+    }
     return res.json();
 }

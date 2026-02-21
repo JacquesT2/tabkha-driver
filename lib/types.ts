@@ -65,3 +65,25 @@ export type MatrixResult = {
     durationsSeconds: number[][];
     distancesMeters: number[][];
 };
+
+export type ManualOrder = {
+    id: string;
+    customerName: string;
+    address: string;
+    deliveryWindow: string;
+    status: string;
+    deliveryDate: string;
+};
+
+export type ModifiedDrop = {
+    id: string;
+    order_id: string;
+    original_delivery_date: string;
+    new_delivery_date: string | null;
+    new_delivery_window_start: string | null;
+    new_delivery_window_end: string | null;
+    status: string;
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+};
