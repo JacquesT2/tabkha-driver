@@ -1,3 +1,4 @@
 export const TEST_ACCOUNTS = [
-    'jacques.tahan@outlook.com'
+    'jacques.tahan@outlook.com',
+    'khoren.tahan@gmail.com'
 ];
