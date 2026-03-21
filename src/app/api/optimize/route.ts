@@ -167,10 +167,10 @@ function createRouteResult(index: number, stops: import('@/lib/types').Optimized
         // Let's stick to Duration for Cost.
     }
 
-    // Cost: 30 EUR / hr
+    // Cost: 39 EUR / hr
     // Duration in seconds / 3600 * 30
     const hours = totalDuration / 3600;
-    const cost = Math.ceil(hours * 30 * 100) / 100; // Round to 2 decimals
+    const cost = Math.ceil(hours * 39 * 100) / 100; // Round to 2 decimals
 
     // Average cost per drop
     const dropCount = stops.filter(s => !s.isDepotReturn).length;

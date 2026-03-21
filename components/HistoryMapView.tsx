@@ -16,9 +16,10 @@ type Props = {
     address: string | null;
     parking_type: string | null;
   }>;
+  visibleRoutes?: Set<number>;
 };
 
-export default function HistoryMapView({ depot, stops, polyline, routeSegments, showParking, parkingSpots = [] }: Props) {
+export default function HistoryMapView({ depot, stops, polyline, routeSegments, showParking, parkingSpots = [], visibleRoutes }: Props) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -78,9 +79,19 @@ export default function HistoryMapView({ depot, stops, polyline, routeSegments, 
         .addTo(map);
       markersRef.current.push(depotMarker);
 
-      // Add stop markers
+      // Pre-compute which route segment each stop belongs to
+      const stopSegmentMap: number[] = [];
+      let currentSeg = 0;
+      stops.forEach((stop, i) => {
+        stopSegmentMap[i] = currentSeg;
+        if ((stop as any).isDepotReturn) currentSeg++;
+      });
+
+      // Add stop markers (skip stops belonging to hidden routes)
       stops.forEach((s, i) => {
         if (s.lat && s.lng) {
+          const segIdx = stopSegmentMap[i];
+          if (visibleRoutes && !visibleRoutes.has(segIdx)) return;
           const stopMarker = new maplibregl.Marker({
             color: ('isDepotReturn' in s && s.isDepotReturn) ? '#FFA500' : '#34a853'
           })
@@ -156,6 +167,7 @@ export default function HistoryMapView({ depot, stops, polyline, routeSegments, 
       let allBounds: maplibregl.LngLatBounds | null = null;
 
       segments.forEach((segment, segIdx) => {
+        if (visibleRoutes && !visibleRoutes.has(segIdx)) return;
         let segmentCoords: number[][] = [];
 
         // Try to use routeSegments if available (preferred)
@@ -272,7 +284,7 @@ export default function HistoryMapView({ depot, stops, polyline, routeSegments, 
     } else {
       map.once('load', updateMap);
     }
-  }, [depot.lat, depot.lng, polyline, routeSegments, stops]);
+  }, [depot.lat, depot.lng, polyline, routeSegments, stops, visibleRoutes]);
 
   // Parking Visualization (Separate Effect)
   useEffect(() => {

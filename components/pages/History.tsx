@@ -9,6 +9,7 @@ import { ParkingSpot } from '@/lib/services/parking-spots.supabase';
 import { fetchAllParkingSpots } from '@/lib/services/parking-spots.supabase';
 
 const DEPOT = { lat: 48.910790500083145, lng: 2.3593634359991196 };
+const ROUTE_COLORS = ['#1a73e8', '#ea4335', '#fbbc04', '#34a853', '#9c27b0', '#ff9800', '#00bcd4', '#e91e63'];
 
 const COLORS = {
   accent: '#ea580c',
@@ -87,6 +88,24 @@ export default function History() {
   const [optimizingBatches, setOptimizingBatches] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [excludeTestAccounts, setExcludeTestAccounts] = useState(true);
+  const [visibleRoutes, setVisibleRoutes] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (optimizedRoute?.routes?.length) {
+      setVisibleRoutes(new Set(optimizedRoute.routes.map((_, i) => i)));
+    } else {
+      setVisibleRoutes(new Set([0]));
+    }
+  }, [optimizedRoute]);
+
+  const toggleRoute = (idx: number) => {
+    setVisibleRoutes(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
 
   // Parking State
   const [showParking, setShowParking] = useState(false);
@@ -649,16 +668,43 @@ export default function History() {
 
                   {/* Mini map preview */}
                   {(geocodedStops.length > 0 || workingRoute) && (
-                    <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, overflow: 'hidden', height: 260, flexShrink: 0 }}>
-                      <HistoryMapView
-                        depot={DEPOT}
-                        stops={(activeRouteForMap ? activeRouteForMap.orderedStops : geocodedStops).filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))}
-                        polyline={activeRouteForMap?.overviewPolyline}
-                        routeSegments={activeRouteForMap?.routeSegments}
-                        showParking={showParking}
-                        parkingSpots={parkingSpots}
-                      />
-                    </div>
+                    <>
+                      {activeRouteForMap && (activeRouteForMap.routes?.length || 0) > 1 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.8rem', color: COLORS.gray }}>Show on map:</span>
+                          {activeRouteForMap.routes!.map((_, idx) => {
+                            const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+                            const active = visibleRoutes.has(idx);
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => toggleRoute(idx)}
+                                style={{
+                                  padding: '3px 10px', borderRadius: 14,
+                                  border: `2px solid ${color}`,
+                                  backgroundColor: active ? color : 'white',
+                                  color: active ? 'white' : color,
+                                  cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
+                                }}
+                              >
+                                Route {idx + 1}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, overflow: 'hidden', height: 260, flexShrink: 0 }}>
+                        <HistoryMapView
+                          depot={DEPOT}
+                          stops={(activeRouteForMap ? activeRouteForMap.orderedStops : geocodedStops).filter(s => !excludeTestAccounts || !s.email || !TEST_ACCOUNTS.includes(s.email))}
+                          polyline={activeRouteForMap?.overviewPolyline}
+                          routeSegments={activeRouteForMap?.routeSegments}
+                          showParking={showParking}
+                          parkingSpots={parkingSpots}
+                          visibleRoutes={visibleRoutes}
+                        />
+                      </div>
+                    </>
                   )}
 
                   {/* Working route / Viewing route table */}
@@ -671,12 +717,31 @@ export default function History() {
                             {viewingCustomRoute ? `📌 ${viewingCustomRoute.name}` : '✨ Optimized Route'}
                             {!viewingCustomRoute && isModified && <span style={{ fontSize: '0.75rem', marginLeft: 8, color: '#92400e', backgroundColor: '#fef3c7', padding: '1px 7px', borderRadius: 99, border: '1px solid #fcd34d' }}>Modified – not saved</span>}
                           </h4>
-                          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-                            {Math.round(displayRoute.totalDistanceMeters / 1000)} km · {Math.round(displayRoute.totalDurationSeconds / 60)} min
-                            {(displayRoute.routes?.length || 0) > 0 && (
-                              <span style={{ marginLeft: 8, fontWeight: 700, color: COLORS.success }}>
-                                €{(displayRoute.routes || []).reduce((s, r) => s + r.estimatedCost, 0).toFixed(2)}
-                              </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.85rem', color: '#6b7280' }}>
+                            <span>
+                              {Math.round(displayRoute.totalDistanceMeters / 1000)} km · {Math.round(displayRoute.totalDurationSeconds / 60)} min
+                              {(displayRoute.routes?.length || 0) > 0 && (() => {
+                                const trafficTotal = googleRoute?.routes?.reduce((s, r) => s + r.estimatedCost, 0);
+                                const orsTotal = (displayRoute.routes || []).reduce((s, r) => s + r.estimatedCost, 0);
+                                return trafficTotal != null ? (
+                                  <>
+                                    <span style={{ marginLeft: 8, fontWeight: 700, color: COLORS.red }}>€{trafficTotal.toFixed(2)} w/ traffic</span>
+                                    <span style={{ marginLeft: 6, color: '#9ca3af', textDecoration: 'line-through', fontSize: '0.8rem' }}>€{orsTotal.toFixed(2)}</span>
+                                  </>
+                                ) : (
+                                  <span style={{ marginLeft: 8, fontWeight: 700, color: COLORS.success }}>€{orsTotal.toFixed(2)}</span>
+                                );
+                              })()}
+                            </span>
+                            {(displayRoute.routes?.length || 0) === 0 && (
+                              <a
+                                href={buildGoogleMapsUrl(DEPOT, displayRoute.orderedStops)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ padding: '3px 9px', backgroundColor: '#4285f4', color: 'white', borderRadius: 5, fontSize: '0.78rem', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}
+                              >
+                                Google Maps ↗
+                              </a>
                             )}
                           </div>
                         </div>
@@ -689,14 +754,29 @@ export default function History() {
                               const groupId = String(idx);
                               return (
                                 <div key={route.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: `1px solid ${COLORS.border}`, backgroundColor: COLORS.bg }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderBottom: `1px solid ${COLORS.border}`, backgroundColor: COLORS.bg }}>
                                     <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Route {idx + 1}</span>
-                                    <div style={{ textAlign: 'right', fontSize: '0.85rem' }}>
-                                      <span style={{ fontWeight: 700, color: COLORS.success }}>€{route.estimatedCost.toFixed(2)}</span>
-                                      <span style={{ color: '#6b7280', marginLeft: 8 }}>{Math.round(route.totalDurationSeconds / 60)} min</span>
-                                      {trafficRoute && Math.abs(trafficRoute.totalDurationSeconds - route.totalDurationSeconds) > 30 && (
-                                        <span style={{ color: COLORS.red, marginLeft: 6 }}>({Math.round(trafficRoute.totalDurationSeconds / 60)} min w/ traffic)</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.85rem' }}>
+                                      {trafficRoute ? (
+                                        <>
+                                          <span style={{ fontWeight: 700, color: COLORS.red }}>€{trafficRoute.estimatedCost.toFixed(2)}</span>
+                                          <span style={{ color: COLORS.red }}>{Math.round(trafficRoute.totalDurationSeconds / 60)} min w/ traffic</span>
+                                          <span style={{ color: '#9ca3af', textDecoration: 'line-through', fontSize: '0.8rem' }}>€{route.estimatedCost.toFixed(2)} · {Math.round(route.totalDurationSeconds / 60)} min</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span style={{ fontWeight: 700, color: COLORS.success }}>€{route.estimatedCost.toFixed(2)}</span>
+                                          <span style={{ color: '#6b7280' }}>{Math.round(route.totalDurationSeconds / 60)} min</span>
+                                        </>
                                       )}
+                                      <a
+                                        href={buildGoogleMapsUrl(DEPOT, route.stops)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{ padding: '3px 9px', backgroundColor: '#4285f4', color: 'white', borderRadius: 5, fontSize: '0.78rem', fontWeight: 600, textDecoration: 'none' }}
+                                      >
+                                        Google Maps ↗
+                                      </a>
                                     </div>
                                   </div>
                                   <div style={{ overflowX: 'auto' }}>
@@ -962,6 +1042,7 @@ export default function History() {
               routeSegments={activeRouteForMap?.routeSegments}
               showParking={showParking}
               parkingSpots={parkingSpots}
+              visibleRoutes={visibleRoutes}
             />
           </div>
 
@@ -996,6 +1077,30 @@ export default function History() {
               <h3 style={{ margin: 0, fontSize: '1em' }}>
                 {viewingCustomRoute ? `📌 ${viewingCustomRoute.name}` : (activeRouteForMap ? 'Optimized Itinerary' : 'Stops')}
               </h3>
+              {optimizedRoute && (optimizedRoute.routes?.length || 0) > 1 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {optimizedRoute.routes!.map((_, idx) => {
+                    const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+                    const active = visibleRoutes.has(idx);
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => toggleRoute(idx)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '3px 9px', borderRadius: 14,
+                          border: `2px solid ${color}`,
+                          backgroundColor: active ? color : 'white',
+                          color: active ? 'white' : color,
+                          cursor: 'pointer', fontSize: '0.8em', fontWeight: 600
+                        }}
+                      >
+                        Route {idx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
               {activeRouteForMap ? (
@@ -1003,10 +1108,20 @@ export default function History() {
                   {(activeRouteForMap.routes?.length || 0) > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       {activeRouteForMap.routes!.map((route, idx) => (
-                        <div key={route.id} style={{ border: '1px solid #ddd', borderRadius: 6, padding: 8 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, borderBottom: '1px solid #eee', paddingBottom: 4 }}>
+                        <div key={route.id} style={{ border: `2px solid ${visibleRoutes.has(idx) ? ROUTE_COLORS[idx % ROUTE_COLORS.length] : '#ddd'}`, borderRadius: 6, padding: 8, opacity: visibleRoutes.has(idx) ? 1 : 0.5 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, borderBottom: '1px solid #eee', paddingBottom: 4 }}>
                             <h4 style={{ margin: 0, fontSize: '0.95em' }}>Route {idx + 1}</h4>
-                            <span style={{ fontSize: '0.9em', fontWeight: 700, color: COLORS.success }}>€{route.estimatedCost.toFixed(2)}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: '0.9em', fontWeight: 700, color: COLORS.success }}>€{route.estimatedCost.toFixed(2)}</span>
+                              <a
+                                href={buildGoogleMapsUrl(DEPOT, route.stops)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ padding: '2px 8px', backgroundColor: '#4285f4', color: 'white', borderRadius: 5, fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none' }}
+                              >
+                                Maps ↗
+                              </a>
+                            </div>
                           </div>
                           <StopsTable stops={route.stops} />
                         </div>
@@ -1032,6 +1147,16 @@ export default function History() {
       )}
     </div>
   );
+}
+
+// ─── Google Maps export ──────────────────────────────────────────────────────
+function buildGoogleMapsUrl(depot: { lat: number; lng: number }, stops: Array<{ lat?: number | null; lng?: number | null }>) {
+  const coords = [
+    `${depot.lat},${depot.lng}`,
+    ...stops.filter(s => s.lat && s.lng).map(s => `${s.lat},${s.lng}`),
+    `${depot.lat},${depot.lng}`,
+  ];
+  return `https://www.google.com/maps/dir/${coords.join('/')}`;
 }
 
 // ─── Tiny helper component ───────────────────────────────────────────────────

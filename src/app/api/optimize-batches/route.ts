@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
 
             // Calculate cost for this route
             const hours = batchDuration / 3600;
-            const cost = Math.ceil(hours * 30 * 100) / 100;
+            const cost = Math.ceil(hours * 39 * 100) / 100;
 
             routes.push({
                 id: `batch-${batch.slotName.toLowerCase()}`,

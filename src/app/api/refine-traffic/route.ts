@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
                 const refined = await refineRouteWithTraffic(depot, route.stops as any, routeStartTime);
 
                 const hours = refined.totalDurationSeconds / 3600;
-                const cost = Math.ceil(hours * 30 * 100) / 100;
+                const cost = Math.ceil(hours * 39 * 100) / 100;
 
                 refinedRoutes.push({
                     id: route.id,
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
             const refined = await refineRouteWithTraffic(depot, body.stops as any, driverStartTime);
 
             const hours = refined.totalDurationSeconds / 3600;
-            const cost = Math.ceil(hours * 30 * 100) / 100;
+            const cost = Math.ceil(hours *39 * 100) / 100;
 
             return NextResponse.json({
                 orderedStops: refined.orderedStops,
